@@ -5,6 +5,8 @@
 #include <IRremoteESP8266.h>
 #include <IRutils.h>
 #include <string.h>
+#include <vector>
+#include <ArduinoJson.h>
 // ------------------------
 
 // ---- MACROS ----
@@ -134,9 +136,39 @@ void trigger(){
       irrecv.pause(); // pause the entry of new signals until a read is called
       Serial.println("Signal read successfully, waiting for next command...");
     }
-    if(message.equalsIgnoreCase("onoff")){
-      Serial.println("Turning device on/off");
+    else if(message.equalsIgnoreCase("send")){
+      Serial.println("Sending saved signal...");
       sendRout(); // TODO send message parameter
+    }
+    else if(message.equalsIgnoreCase("save")){
+      Serial.println("Saving signal received... Insert action name:");
+      char msg[12];
+      serialRead(msg);
+      String message("");
+      u_int8_t i = 0;
+      while (isAlphaNumeric(msg[i]) && i < 12){
+        message.concat(msg[i]);
+        ++i;
+      }
+      // Serializing the "results" structure to a json form
+      // this enables the ability to save decoded signals
+      JsonDocument command;
+      command["name"] = message;
+      command["size"] = size;
+      command["protocol"] = protocol;
+      command["value"] = results.value;
+      
+      JsonArray resState = command["state"].to<JsonArray>();
+      std::vector<uint8_t> stateArr(results.state, results.state + sizeof(results.state) / sizeof(results.state[0]));
+      for(auto code : stateArr)
+        resState.add(code);
+
+      JsonArray data = command["data"].to<JsonArray>();
+      std::vector<uint16_t> array(raw_array, raw_array+size);
+      for(auto code : array)
+        data.add(code);
+
+      serializeJson(command, Serial);
     }
   }
 }
