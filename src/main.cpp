@@ -14,6 +14,8 @@
 #define IR_IN 14 // IR signal input pin D5
 #define IR_OUT 4 // IR signal output pin D2
 #define B_RATE 115200 // Baud Rate
+
+#define IS_RAW 1
 // ------------------------
 
 // ---- PARAMETERS ----
@@ -23,9 +25,11 @@ const uint16_t kIrLedPin = IR_OUT; // SENDER'S GPIO
 
 const uint32_t kBaudRate = B_RATE; // Baud rate
 
-const uint16_t kCaptureBufferSize = 1024;  // Buffer size
+const uint16_t kCaptureBufferSize = 2048;//1024;  // Buffer size
 
-const uint8_t kTimeout = 50;  // Timeout for recognizing the end of a entire message
+const uint8_t kTimeout = 244;  // Timeout for recognizing the end of a entire message
+
+const uint8_t kTol = 10;  //  base tolerance percentage for matching incoming IR messages.
 
 const uint16_t kFrequency = 38000;  // Modulation frequency of IR protocol in Hz
 // ---------------------------
@@ -87,12 +91,10 @@ void rcvRout(){
 void sendRout(){
   // determines if the transmission was successfull
   bool success = true; 
-  // verify if it's a known protocol
-  if (protocol == decode_type_t::UNKNOWN) {
-#if SEND_RAW
+  if (IS_RAW) {
     // Send raw array via IR circuit.
+    Serial.println("Sending RAW:");
     irsend.sendRaw(raw_array, size, kFrequency);
-#endif  // SEND_RAW
   } else if (hasACState(protocol)) {  // Does the message require a state[]?
     // It does, so send with bytes instead.
     success = irsend.send(protocol, results.state, size / 8);
@@ -185,6 +187,9 @@ void setup() {
   
   while (!Serial)  // Wait for the serial connection to be establised.
     delay(50);
+
+  // Set tolerance
+  //irrecv.setTolerance(kTol);
   Serial.println();
 
   Serial.println("Setup of IR controller finished");
