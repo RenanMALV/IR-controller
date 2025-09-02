@@ -1,7 +1,7 @@
 #include <Arduino.h>
 #include <ArduinoJson.h>
 #include "SerialUtils.h"
-#include "ir_io.h"
+#include "IR_IO.h"
 
 void handleCommand() {
   char msg[12];

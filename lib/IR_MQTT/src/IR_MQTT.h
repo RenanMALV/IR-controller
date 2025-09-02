@@ -7,15 +7,16 @@
 
 class IRMQTT {
   public:
-    IRMQTT(const char* broker, uint16_t port, const char* sn);
+    IRMQTT(const char* broker, uint16_t port, const char* sn, const char* fw, const char* location);
     void begin();
     void loop();
-    void publishCurrentTemp(int temp);
+    void publishEnvSet(float temp, float humidity);
     void publishCommandSent(const String& command, bool success);
-    void publishReachedTemp(int temp);
-    void publishDiscovery(const char* ip, const char* fw, const char* location, const String& onCmd, const String& offCmd);
-    void publishInfo(const char* status, const char* ip, const char* fw);
-    void publishLocation(const String& location);
+    //void publishReachedTemp(int temp);
+    bool publishDiscovery(const char* ip, const char* fw, const char* location);
+    void publishInfo(const char* status, const char* ip, const char* fw, const char* location);
+    //void publishLocation(const String& location);
+    void publishConfigEnd(unsigned long cmd);
     const char* _broker;
     
   private:
@@ -25,9 +26,12 @@ class IRMQTT {
 
     uint16_t _port;
     const char* _sn;
+    const char* _fw;
+    const char* _location;
 
     WiFiClient espClient;
     PubSubClient client;
+
 };
 
 #endif

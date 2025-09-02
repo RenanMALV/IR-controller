@@ -1,10 +1,11 @@
 #include "IR_MQTT.h"
 
-IRMQTT::IRMQTT(const char* broker, uint16_t port, const char* sn)
-  : _broker(broker), _port(port), _sn(sn), client(espClient) {}
+IRMQTT::IRMQTT(const char* broker, uint16_t port, const char* sn, const char* fw, const char* location)
+  : _broker(broker), _port(port), _sn(sn), client(espClient), _fw(fw), _location(location) {}
 
 void IRMQTT::begin() {
   client.setServer(_broker, _port);
+  Serial.println("Server set");
   client.setCallback([this](char* topic, byte* payload, unsigned int length) {
     this->callback(topic, payload, length);
   });
@@ -24,7 +25,12 @@ void IRMQTT::reconnect() {
     String willTopic = "discovery";
     StaticJsonDocument<128> willPayload;
     willPayload["sn"] = _sn;
+    willPayload["ip"] = WiFi.localIP().toString();
     willPayload["status"] = "offline";
+    willPayload["firmware"] = _fw;
+    willPayload["location"] = _location;
+    // Substituir os valores acima com dados reais
+    
 
     char willMessage[128];
     serializeJson(willPayload, willMessage);
@@ -32,10 +38,8 @@ void IRMQTT::reconnect() {
     // Conecta com LWT
     if (client.connect(clientId.c_str(), willTopic.c_str(), 1, true, willMessage)) {
         subscribeTopics();
-
-        publishDiscovery(WiFi.localIP().toString().c_str(), "v1.0.3", "Living Room", "0xF00D", "0xF00E");
-        // TODO: substituir os argumentos com valores reais
-
+        while( !publishDiscovery(WiFi.localIP().toString().c_str(), _fw, _location))
+          Serial.println("Waiting for MQTT discovery...");
         Serial.println("MQTT connected.");
     } else {
       delay(2000);
@@ -44,97 +48,139 @@ void IRMQTT::reconnect() {
 }
 
 void IRMQTT::subscribeTopics() {
-  String tempTopic = "controller/" + String(_sn) + "/temperature";
+  //String tempTopic = "controller/" + String(_sn) + "/temperature";
+  //String locationTopic = "controller/" + String(_sn) + "/location";
+  
   String stateTopic = "controller/" + String(_sn) + "/command/state";
   String infoTopic = "controller/" + String(_sn) + "/info";
-  String locationTopic = "controller/" + String(_sn) + "/location";
+  String configStartTopic = "controller/" + String(_sn) + "/configure/start";
 
-  client.subscribe(tempTopic.c_str());
+  //client.subscribe(tempTopic.c_str());
   client.subscribe(stateTopic.c_str());
   client.subscribe(infoTopic.c_str());
-  client.subscribe(locationTopic.c_str());
+  //client.subscribe(locationTopic.c_str());
+  client.subscribe(configStartTopic.c_str());
 }
 
 void IRMQTT::callback(char* topic, byte* payload, unsigned int length) {
-  StaticJsonDocument<256> doc;
-  DeserializationError error = deserializeJson(doc, payload, length);
-  if (error) return;
+  Serial.println("Message arrived on topic: " + String(topic));
+  StaticJsonDocument<1024> jsonMsg;
+  DeserializationError error = deserializeJson(jsonMsg, payload, length);
+  if (error && !(String(topic).endsWith("/info") && length == 0)){
+    Serial.print("deserializeJson() failed: ");
+    Serial.println(error.c_str()); 
+    return;
+  }
+
 
   String topicStr(topic);
 
-  if (topicStr.endsWith("/temperature")) {
-    int temp = doc["value"];
-    String cmd = doc["command"];
-    // TODO: acionar IR com cmd e atualizar estado da temperatura
+  if (topicStr.endsWith("/info")) {
+    if (length == 0 || (length == 4 && strncmp((const char*)payload, "null", 4) == 0)) {
+      Serial.println("Empty or null payload received... reporting device info.");
+      publishInfo("online", WiFi.localIP().toString().c_str(), _fw, _location);
+      return;
+    }
+    //else
+    //  delay(1000);
+    //  Serial.println("Info update received: " + String((const char*)payload));
+    return;
   } else if (topicStr.endsWith("/command/state")) {
-    int state = doc["value"];
-    String cmd = doc["command"];
-    // TODO: acionar IR (liga ou desliga) com cmd
+    int state = jsonMsg["value"];
+    String cmdStr = jsonMsg["command"];
+    String cmdType = jsonMsg["command_type"];
+    String requestCode = jsonMsg["request_code"];
+
+    unsigned long cmd = strtoul(cmdStr.c_str(), nullptr, 16); // base 16 for hex
+    Serial.println("Received command: " + state);
+    // TODO: acionar IR com o comando em cmd
+    bool success = true; // placeholder, substituir pela resposta real do envio do comando
+    publishCommandSent(requestCode, success);
+    return;
+  } else if (topicStr.endsWith("/configure/start")) {
+    Serial.println("Configuration start");
+    // TODO: recebe IR command do sensor
+    unsigned long cmd = 0xB14779; // placeholder
+    publishConfigEnd(cmd); // TODO: substituir pelo comando recebido do sensor
+    return;
   }
-  // TODO: tratar atualizações em info e location se necessário
+
 }
 
-void IRMQTT::publishCurrentTemp(int temp) {
-  String topic = "controller/" + String(_sn) + "/temperature/current";
-  StaticJsonDocument<64> doc;
-  doc["value"] = temp;
+void IRMQTT::publishEnvSet(float temp, float humidity) {
+  String topic = "controller/" + String(_sn) + "/envset/current";
+  StaticJsonDocument<64> jsonMsg;
+  jsonMsg["temperature"] = temp;
+  jsonMsg["humidity"] = humidity;
   char payload[64];
-  serializeJson(doc, payload);
+  serializeJson(jsonMsg, payload);
   client.publish(topic.c_str(), payload);
 }
 
-void IRMQTT::publishCommandSent(const String& command, bool success) {
+void IRMQTT::publishCommandSent(const String& request, bool success) {
   String topic = "controller/command/notification";
-  StaticJsonDocument<128> doc;
-  doc["sn"] = _sn;
-  doc["command"] = command;
-  doc["status"] = success ? 1 : 0;
+  StaticJsonDocument<128> jsonMsg;
+  jsonMsg["sn"] = _sn;
+  jsonMsg["request_code"] = request;
+  jsonMsg["status"] = success;
   char payload[128];
-  serializeJson(doc, payload);
+  serializeJson(jsonMsg, payload);
   client.publish(topic.c_str(), payload);
 }
 
-void IRMQTT::publishReachedTemp(int temp) {
+/*void IRMQTT::publishReachedTemp(int temp) {
   String topic = "controller/temperature/notification";
-  StaticJsonDocument<96> doc;
-  doc["sn"] = _sn;
-  doc["value"] = temp;
+  StaticJsonDocument<96> jsonMsg;
+  jsonMsg["sn"] = _sn;
+  jsonMsg["value"] = temp;
   char payload[96];
-  serializeJson(doc, payload);
+  serializeJson(jsonMsg, payload);
   client.publish(topic.c_str(), payload);
-}
+}*/
 
-void IRMQTT::publishDiscovery(const char* ip, const char* fw, const char* location, const String& onCmd, const String& offCmd) {
+bool IRMQTT::publishDiscovery(const char* ip, const char* fw, const char* location) {
   String topic = "discovery";
-  StaticJsonDocument<256> doc;
-  doc["sn"] = _sn;
-  doc["ip"] = ip;
-  doc["status"] = "online";
-  doc["firmware"] = fw;
-  doc["location"] = location;
-  doc["on_command"] = onCmd;
-  doc["off_command"] = offCmd;
+  StaticJsonDocument<256> jsonMsg;
+  jsonMsg["sn"] = _sn;
+  jsonMsg["ip"] = ip;
+  jsonMsg["status"] = "online";
+  jsonMsg["firmware"] = fw;
+  jsonMsg["location"] = location;
   char payload[256];
-  serializeJson(doc, payload);
-  client.publish(topic.c_str(), payload, true);  // retained
+  serializeJson(jsonMsg, payload);
+  if (client.publish(topic.c_str(), payload, true)) // retained (return true if success)
+    Serial.println("Discovered Successfully!") ;
+    return true;
+  return false;
 }
 
-void IRMQTT::publishInfo(const char* status, const char* ip, const char* fw) {
+void IRMQTT::publishInfo(const char* status, const char* ip, const char* fw, const char* location) {
   String topic = "controller/" + String(_sn) + "/info";
-  StaticJsonDocument<128> doc;
-  doc["status"] = status;
-  doc["ip"] = ip;
-  doc["firmware"] = fw;
+  StaticJsonDocument<128> jsonMsg;
+  jsonMsg["status"] = status;
+  jsonMsg["ip"] = ip;
+  jsonMsg["firmware"] = fw;
+  jsonMsg["location"] = location;
   char payload[128];
-  serializeJson(doc, payload);
+  serializeJson(jsonMsg, payload);
   client.publish(topic.c_str(), payload);
 }
 
-void IRMQTT::publishLocation(const String& location) {
+/*void IRMQTT::publishLocation(const String& location) {
   String topic = "controller/" + String(_sn) + "/location";
-  StaticJsonDocument<64> doc;
-  doc["value"] = location;
+  StaticJsonDocument<64> jsonMsg;
+  jsonMsg["value"] = location;
   char payload[64];
-  serializeJson(doc, payload);
+  serializeJson(jsonMsg, payload);
   client.publish(topic.c_str(), payload);
+}*/
+
+void IRMQTT::publishConfigEnd(unsigned long cmd) {
+  String topic = "controller/" + String(_sn) + "/configure/end";
+  StaticJsonDocument<1024> jsonMsg;
+  jsonMsg["command"] = cmd;
+  char payload[1024];
+  serializeJson(jsonMsg, payload);
+  client.publish(topic.c_str(), payload);
+  Serial.println("Published config end.");
 }
