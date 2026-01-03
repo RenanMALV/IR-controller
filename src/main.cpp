@@ -3,35 +3,51 @@
 
 #include "SerialUtils.h"
 #include "IR_IO.h"
-#include "CommandHandler.h"
+//#include "CommandHandler.h"
 #include "IR_MQTT.h"
+#include "DHT.h"
 
 #define LED D0
 #define B_RATE 115200
 
-Ticker envTicker;
-#define ENV_PUBLISH_INTERVAL (uint32_t)5000  // Intervalo de publicação em milissegundos
-
-#define WIFI_SSID "Renan"
-#define WIFI_PASS "renan0405" // TODO substituir por SSID e senha reais ocult
+#define WIFI_SSID "labFUTURO"
+#define WIFI_PASS "" // TODO substituir por SSID e senha reais ocult
 
 // TODO: Criar arquivo de configuração separado para essas definições
-#define MQTT_BROKER "test.mosquitto.org"
+#define MQTT_BROKER "10.10.19.118"
 #define MQTT_PORT 1883
+#define MQTT_USER "controle"
+#define MQTT_PASS "@96jK2nmM5DqZ47w5H7npMa9f@sKuJ"
 #define _SN "ABC123"      // TODO gerar e guardar o SN na EEPROM de forma persistente e automática
 #define _FW "v1.0.3"      // TODO substituir por versão real do firmware
-#define _LOCATION "Lab 1" // TODO substituir por localização real do dispositivo
+#define _LOCATION "Lab 3" // TODO substituir por localização real do dispositivo
 
 IRMQTT mqtt(
   MQTT_BROKER,
+  MQTT_USER,
+  MQTT_PASS,
   MQTT_PORT,
   _SN,
   _FW,             
   _LOCATION        
 );
 
+Ticker envTicker;
+#define ENV_PUBLISH_INTERVAL (uint32_t)5000  // Intervalo de publicação das condições ambientais em milissegundos
+
+// DHT sensor
+#define DHTPIN D4       // Pino conectado ao sensor DHT
+#define DHTTYPE DHT22   // DHT 22  (AM2302), DHT11, etc.
+DHT dht(DHTPIN, DHTTYPE);
+
 void publishEnvironmentSettings() {
-  mqtt.publishEnvSet(25.5+(millis()%3), 60.0+(millis()%3)); // TODO: valores reais do sensor
+  float temp = dht.readTemperature();
+  float humidity = dht.readHumidity();
+  if (isnan(temp) || isnan(humidity)) {
+    Serial.println("Failed to read from DHT sensor!");
+    return;
+  }
+  mqtt.publishEnvSet(temp, humidity);
 }
 
 void setup() {
@@ -39,9 +55,14 @@ void setup() {
   Serial.begin(B_RATE);
   while (!Serial) delay(50);
 
-  setupIR();
+  Serial.println("Starting Temperature and Humidity Sensor...");
+  delay(1000); // Aguarda estabilização do sensor (Obrigatório pelo data sheet)
+  dht.begin();
 
-  WiFi.begin("Renan", "renan0405"); // TODO substituir por SSID e senha reais ocultos
+  Serial.println("Starting IR Module...");
+  IR_setup();
+
+  WiFi.begin(WIFI_SSID, WIFI_PASS); // TODO substituir por SSID e senha reais ocultos
   Serial.println("Connecting to WiFi...");
   while (WiFi.status() != WL_CONNECTED) {
     Serial.print(".");

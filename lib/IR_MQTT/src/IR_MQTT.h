@@ -4,10 +4,11 @@
 #include <ESP8266WiFi.h>
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
+#include "IR_IO.h"
 
 class IRMQTT {
   public:
-    IRMQTT(const char* broker, uint16_t port, const char* sn, const char* fw, const char* location);
+    IRMQTT(const char* broker, const char* user, const char* pass, uint16_t port, const char* sn, const char* fw, const char* location);
     void begin();
     void loop();
     void publishEnvSet(float temp, float humidity);
@@ -18,6 +19,8 @@ class IRMQTT {
     //void publishLocation(const String& location);
     void publishConfigEnd(unsigned long cmd);
     const char* _broker;
+    const char* _user;
+    const char* _pass;
     
   private:
     void callback(char* topic, byte* payload, unsigned int length);
