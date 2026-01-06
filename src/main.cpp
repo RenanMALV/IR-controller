@@ -10,11 +10,13 @@
 #define LED D0
 #define B_RATE 115200
 
-#define WIFI_SSID "labFUTURO"
-#define WIFI_PASS "" // TODO substituir por SSID e senha reais ocult
+//#define WIFI_SSID "labFUTURO"
+//#define WIFI_PASS "" // TODO substituir por SSID e senha reais ocult
+#define WIFI_SSID "Renan"
+#define WIFI_PASS "renan0405"
 
 // TODO: Criar arquivo de configuração separado para essas definições
-#define MQTT_BROKER "10.10.19.118"
+#define MQTT_BROKER "api.controle.ic.ufrj.br"
 #define MQTT_PORT 1883
 #define MQTT_USER "controle"
 #define MQTT_PASS "@96jK2nmM5DqZ47w5H7npMa9f@sKuJ"

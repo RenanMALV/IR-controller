@@ -4,6 +4,7 @@
 #include <ESP8266WiFi.h>
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
+#include <WiFiClientSecure.h>
 #include "IR_IO.h"
 
 class IRMQTT {
@@ -32,7 +33,7 @@ class IRMQTT {
     const char* _fw;
     const char* _location;
 
-    WiFiClient espClient;
+    WiFiClientSecure espClient;
     PubSubClient client;
 
 };

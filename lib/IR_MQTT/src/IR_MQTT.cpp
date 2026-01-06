@@ -1,7 +1,10 @@
 #include "IR_MQTT.h"
 
 IRMQTT::IRMQTT(const char* broker, const char* user, const char* pass, uint16_t port, const char* sn, const char* fw, const char* location)
-  : _broker(broker), _user(user), _pass(pass), _port(port), _sn(sn), client(espClient), _fw(fw), _location(location) {}
+  : _broker(broker), _user(user), _pass(pass), _port(port), _sn(sn), client(espClient), _fw(fw), _location(location) {
+    espClient.setInsecure(); // Aceitar qualquer certificado TLS substituri por
+    // espClient.setCACert(ca_cert);
+  }
 
 void IRMQTT::begin() {
   client.setBufferSize(4096);  // Limitado pelo tamanho da mesagem IR
@@ -20,6 +23,7 @@ void IRMQTT::loop() {
 
 void IRMQTT::reconnect() {
   while (!client.connected()) {
+    Serial.println("Attempting MQTT reconnection...");
     String clientId = "IRCtrl_" + String(_sn);
 
     // Dados do LWT
