@@ -16,12 +16,12 @@
 #define WIFI_PASS "renan0405"
 
 // TODO: Criar arquivo de configuração separado para essas definições
-#define MQTT_BROKER "api.controle.ic.ufrj.br"
+#define MQTT_BROKER "broker.ocsys.qzz.io"      //"api.controle.dcc.ufrj.br"
 #define MQTT_PORT 1883
 #define MQTT_USER "controle"
-#define MQTT_PASS "@96jK2nmM5DqZ47w5H7npMa9f@sKuJ"
+#define MQTT_PASS ""      //"@96jK2nmM5DqZ47w5H7npMa9f@sKuJ"
 #define _SN "ABC123"      // TODO gerar e guardar o SN na EEPROM de forma persistente e automática
-#define _FW "v1.0.3"      // TODO substituir por versão real do firmware
+#define _FW "v1.1.3"      // TODO substituir por versão real do firmware
 #define _LOCATION "Lab 3" // TODO substituir por localização real do dispositivo
 
 IRMQTT mqtt(
@@ -49,6 +49,7 @@ void publishEnvironmentSettings() {
     Serial.println("Failed to read from DHT sensor!");
     return;
   }
+  Serial.printf("Publishing environment settings: Temp=%.2f C, Humidity=%.2f %%\n", temp, humidity);
   mqtt.publishEnvSet(temp, humidity);
 }
 
