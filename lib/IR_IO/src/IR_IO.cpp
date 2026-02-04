@@ -1,8 +1,8 @@
 #include "IR_IO.h"
 
 // --- Parâmetros físicos ---
-static const uint16_t kRecvPin            = 14;    // D5
-static const uint16_t kIrLedPin           = 4;     // D2
+static const uint16_t kRecvPin            = 4;    // D2
+static const uint16_t kIrLedPin           = 5;     // D1
 static const uint16_t kCaptureBufferSize  = 2048;
 static const uint8_t  kTimeout            = 244;
 static const uint16_t kFrequency          = 38000;

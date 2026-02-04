@@ -19,7 +19,7 @@
 #define MQTT_BROKER "broker.ocsys.qzz.io"      //"api.controle.dcc.ufrj.br"
 #define MQTT_PORT 1883
 #define MQTT_USER "controle"
-#define MQTT_PASS ""      //"@96jK2nmM5DqZ47w5H7npMa9f@sKuJ"
+#define MQTT_PASS "@96jK2nmM5DqZ47w5H7npMa9f@sKuJ"
 #define _SN "ABC123"      // TODO gerar e guardar o SN na EEPROM de forma persistente e automática
 #define _FW "v1.1.3"      // TODO substituir por versão real do firmware
 #define _LOCATION "Lab 3" // TODO substituir por localização real do dispositivo
@@ -42,7 +42,14 @@ Ticker envTicker;
 #define DHTTYPE DHT22   // DHT 22  (AM2302), DHT11, etc.
 DHT dht(DHTPIN, DHTTYPE);
 
+volatile bool envPublishPending = false;
+
+void envTickerCallback() {
+  envPublishPending = true;
+}
+
 void publishEnvironmentSettings() {
+  envPublishPending = false;
   float temp = dht.readTemperature();
   float humidity = dht.readHumidity();
   if (isnan(temp) || isnan(humidity)) {
@@ -80,7 +87,7 @@ void setup() {
   mqtt.loop();
   Serial.println("Setup completed.");
 
-  envTicker.attach_ms(ENV_PUBLISH_INTERVAL, publishEnvironmentSettings);
+  envTicker.attach_ms(ENV_PUBLISH_INTERVAL, envTickerCallback);
 }
 
 void loop() {
@@ -89,6 +96,11 @@ void loop() {
   //handleCommand();
   
   mqtt.loop();
+  
+  if(envPublishPending) {
+    publishEnvironmentSettings();
+  }
+
   yield();
 
   //Serial.println("Loop iteration completed.");
