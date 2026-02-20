@@ -12,8 +12,8 @@
 
 //#define WIFI_SSID "labFUTURO"
 //#define WIFI_PASS "" // TODO substituir por SSID e senha reais ocult
-#define WIFI_SSID "Renan"
-#define WIFI_PASS "renan0405"
+#define WIFI_SSID "IC-LCI"
+#define WIFI_PASS "aluno.dcc!"
 
 // TODO: Criar arquivo de configuração separado para essas definições
 #define MQTT_BROKER "broker.ocsys.qzz.io"      //"api.controle.dcc.ufrj.br"

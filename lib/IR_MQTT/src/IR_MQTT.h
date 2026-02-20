@@ -10,6 +10,13 @@
 class IRMQTT {
   public:
     IRMQTT(const char* broker, const char* user, const char* pass, uint16_t port, const char* sn, const char* fw, const char* location);
+    
+    enum class ConfigStatus : uint8_t {
+      SUCCESS = 0,
+      TIMEOUT,
+      MALFORMED_REQUEST
+    };
+    
     void begin();
     void loop();
     void publishEnvSet(float temp, float humidity);
@@ -18,12 +25,13 @@ class IRMQTT {
     bool publishDiscovery(const char* ip, const char* fw, const char* location);
     void publishInfo(const char* status, const char* ip, const char* fw, const char* location);
     //void publishLocation(const String& location);
-    void publishConfigEnd(unsigned long cmd);
+    void publishConfigEnd(ConfigStatus cmd, const char* requestCode);
     const char* _broker;
     const char* _user;
     const char* _pass;
     
   private:
+    const char* getLastTopicLevel(const char* topic);
     void callback(char* topic, byte* payload, unsigned int length);
     void reconnect();
     void subscribeTopics();

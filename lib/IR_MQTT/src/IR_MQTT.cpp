@@ -1,8 +1,19 @@
 #include "IR_MQTT.h"
 
+const char* IRMQTT::getLastTopicLevel(const char* topic) {
+
+    char* lastSlash = strrchr(topic, '/');
+
+    if (lastSlash != NULL && *(lastSlash + 1) != '\0') {
+        return lastSlash + 1;
+    }
+
+    return NULL;
+}
+
 IRMQTT::IRMQTT(const char* broker, const char* user, const char* pass, uint16_t port, const char* sn, const char* fw, const char* location)
-  : _broker(broker), _user(user), _pass(pass), _port(port), _sn(sn), client(espClient), _fw(fw), _location(location) {
-    espClient.setInsecure(); // Aceitar qualquer certificado TLS substituri por
+  : _broker(broker), _user(user), _pass(pass), _port(port), _sn(sn), _fw(fw), _location(location), client(espClient) {
+    espClient.setInsecure(); // Aceitar qualquer certificado TLS substituir por
     // espClient.setCACert(ca_cert);
   }
 
@@ -55,7 +66,7 @@ void IRMQTT::reconnect() {
 void IRMQTT::subscribeTopics() {  
   String stateTopic = "controller/" + String(_sn) + "/command/state";
   String infoTopic = "controller/" + String(_sn) + "/info";
-  String configStartTopic = "controller/" + String(_sn) + "/configure/start";
+  String configStartTopic = "controller/" + String(_sn) + "/configure/start/+";
   //String envSetingsTopic = "controller/" + String(_sn) + "/envset/current";
   String commandNotificationTopic = "controller/command/notification";
 
@@ -72,7 +83,7 @@ void IRMQTT::callback(char* topic, byte* payload, unsigned int length) {
   DeserializationError error = deserializeJson(jsonMsg, payload, length);
   if (error && 
       !(String(topic).endsWith("/info") && length == 0) &&
-      !(String(topic).endsWith("/configure/start") && length == 0)) {
+      !((String(topic).indexOf("/configure/start") != -1) && length == 0)) {
     Serial.print("deserializeJson() failed: ");
     Serial.println(error.c_str()); 
     return;
@@ -139,7 +150,16 @@ void IRMQTT::callback(char* topic, byte* payload, unsigned int length) {
 
     publishCommandSent(requestCode, ok);
     return;
-  } else if (topicStr.endsWith("/configure/start")) {
+  } else if (topicStr.indexOf("/configure/start") != -1) {
+    
+    const char* requestCode = getLastTopicLevel(topic);
+
+    if (requestCode == NULL) {
+      publishConfigEnd(ConfigStatus::MALFORMED_REQUEST, NULL); // Request code mal formado
+      return;
+    }
+
+
     Serial.println("IR learn (RAW): iniciando janela curta de captura...");
 
     IR_resume();
@@ -155,13 +175,11 @@ void IRMQTT::callback(char* topic, byte* payload, unsigned int length) {
 
     if (!got) {
       Serial.println("IR learn: nenhum sinal recebido.");
-      // fallback legacy
-      publishConfigEnd(0UL);
+      publishConfigEnd(ConfigStatus::TIMEOUT, requestCode); // Timeout
       return;
     }
 
-    publishConfigEnd(1UL);
-
+    publishConfigEnd(ConfigStatus::SUCCESS, requestCode); // Success
     return;
   }
 
@@ -208,9 +226,10 @@ bool IRMQTT::publishDiscovery(const char* ip, const char* fw, const char* locati
   jsonMsg["location"] = location;
   char payload[256];
   serializeJson(jsonMsg, payload);
-  if (client.publish(topic.c_str(), payload, true)) // retained (return true if success)
+  if (client.publish(topic.c_str(), payload, true)){ // retained (return true if success)
     Serial.println("Discovered Successfully!") ;
     return true;
+  }
   return false;
 }
 
@@ -235,33 +254,61 @@ void IRMQTT::publishInfo(const char* status, const char* ip, const char* fw, con
   client.publish(topic.c_str(), payload);
 }*/
 
-void IRMQTT::publishConfigEnd(unsigned long cmd) {
-  //if(!cmd) return;
+void IRMQTT::publishConfigEnd(ConfigStatus cmd, const char* requestCode) {
+  String topic = "controller/" + String(_sn) + "/configure/end/";
+  if (requestCode != NULL) {
+    topic += requestCode;
+  }
 
-  String topic = "controller/" + String(_sn) + "/configure/end";
-  // Montar JSON com RAW
-  StaticJsonDocument<2048> out; // aumente se necessário para RAW longos
+  StaticJsonDocument<2048> out;
   String payloadJson;
-  if(cmd){
-    JsonArray data = out.createNestedArray("command");
-    const uint16_t* r = IR_raw();
-    size_t           n = IR_raw_len();
-    for (size_t i = 0; i < n; ++i) data.add(r[i]);
-    
-    serializeJson(out, payloadJson);
-    String result = "Publishing learned RAW:" + payloadJson;
-    Serial.println(result);
-    size_t payload_len = measureJson(out);
-    Serial.printf("MQTT buffer=%u | JSON len=%u\n", client.getBufferSize(), (unsigned)payload_len);
-  }
-  else {
-    payloadJson = "null";
 
-    Serial.println("Publishing NULL JSON payload");
+  // Criar array command sempre (estrutura consistente)
+  JsonArray data = out.createNestedArray("command");
+
+  if (cmd == ConfigStatus::SUCCESS) {  // Success
+
+    out["status"] = "success";
+
+    const uint16_t* r = IR_raw();
+    size_t n = IR_raw_len();
+
+    for (size_t i = 0; i < n; ++i) {
+      data.add(r[i]);
+    }
+
+    Serial.println("Publishing SUCCESS with RAW data");
+
   }
+  else if (cmd == ConfigStatus::TIMEOUT) {  // Timeout
+
+    out["status"] = "timeout";
+    Serial.println("Publishing TIMEOUT");
+
+  }
+  else if (cmd == ConfigStatus::MALFORMED_REQUEST) {  // Malformed request code
+
+    out["status"] = "malformed_request_code";
+    Serial.println("Publishing MALFORMED REQUEST CODE");
+
+  }
+  else {  // fallback defensivo
+
+    out["status"] = "unknown_error";
+    Serial.println("Publishing UNKNOWN ERROR");
+
+  }
+
+  serializeJson(out, payloadJson);
+
+  size_t payload_len = measureJson(out);
+  Serial.printf("MQTT buffer=%u | JSON len=%u\n",
+                client.getBufferSize(),
+                (unsigned)payload_len);
 
   bool pubOk = client.publish(topic.c_str(), payloadJson.c_str());
-  if(pubOk)
+
+  if (pubOk)
     Serial.println("Published config end.");
   else
     Serial.println("Failed to publish config end.");
