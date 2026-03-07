@@ -66,7 +66,7 @@ void IRMQTT::reconnect() {
 void IRMQTT::subscribeTopics() {  
   String stateTopic = "controller/" + String(_sn) + "/command/state";
   String infoTopic = "controller/" + String(_sn) + "/info";
-  String configStartTopic = "controller/" + String(_sn) + "/configure/start/+";
+  String configStartTopic = "controller/" + String(_sn) + "/configure/start/#";
   //String envSetingsTopic = "controller/" + String(_sn) + "/envset/current";
   String commandNotificationTopic = "controller/command/notification";
 
@@ -153,6 +153,8 @@ void IRMQTT::callback(char* topic, byte* payload, unsigned int length) {
   } else if (topicStr.indexOf("/configure/start") != -1) {
     
     const char* requestCode = getLastTopicLevel(topic);
+
+    Serial.println("Config start received. Request code: " + String(requestCode ? requestCode : "NULL"));
 
     if (requestCode == NULL) {
       publishConfigEnd(ConfigStatus::MALFORMED_REQUEST, NULL); // Request code mal formado
