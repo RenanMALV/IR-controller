@@ -108,16 +108,16 @@ void IRMQTT::callback(char* topic, byte* payload, unsigned int length) {
 
     // Ler 'command' (RAW). Preferimos array; como fallback, aceitar string CSV.
     std::vector<uint16_t> raw;
-    if (jsonMsg["command"].is<JsonArray>()) {
-      JsonArray arr = jsonMsg["command"].as<JsonArray>();
+    if (jsonMsg["raw_code"].is<JsonArray>()) {
+      JsonArray arr = jsonMsg["raw_code"].as<JsonArray>();
       raw.reserve(arr.size());
       for (JsonVariant v : arr) {
         unsigned long val = v.as<unsigned long>();
         raw.push_back(static_cast<uint16_t>(val > 0xFFFF ? 0xFFFF : val));
       }
-    } else if (jsonMsg["command"].is<const char*>()) {
+    } else if (jsonMsg["raw_code"].is<const char*>()) {
       // Fallback: "9000,4500,560,560,..."
-      String csv = jsonMsg["command"].as<const char*>();
+      String csv = jsonMsg["raw_code"].as<const char*>();
       raw.clear(); raw.reserve(256);
       uint32_t acc = 0; bool inNum = false;
       for (size_t i = 0; i <= csv.length(); ++i) {
